@@ -10,15 +10,20 @@ from functools import partial
 # -----------------------------
 PVGIS_API = "https://re.jrc.ec.europa.eu/api/v5_2/PVcalc"
 
+STATE_IRRADIANCES = {
+    "Andhra Pradesh": 1700, "Arunachal Pradesh": 1400, "Assam": 1500, "Bihar": 1600,
+    "Chhattisgarh": 1800, "Goa": 1900, "Gujarat": 2000, "Haryana": 1700, "Himachal Pradesh": 1500,
+    "Jharkhand": 1600, "Karnataka": 1800, "Kerala": 1600, "Madhya Pradesh": 1900, "Maharashtra": 1800,
+    "Manipur": 1400, "Meghalaya": 1400, "Mizoram": 1400, "Nagaland": 1400, "Odisha": 1700,
+    "Punjab": 1700, "Rajasthan": 2000, "Sikkim": 1400, "Tamil Nadu": 1900, "Telangana": 1800,
+    "Tripura": 1500, "Uttar Pradesh": 1700, "Uttarakhand": 1500, "West Bengal": 1600,
+    "Andaman and Nicobar Islands": 1700, "Chandigarh": 1700, "Dadra and Nagar Haveli and Daman and Diu": 1800,
+    "Lakshadweep": 1700, "Delhi": 1700
+}
+
 STATE_TARIFFS = {
-    "Rajasthan": 6.0,
-    "Delhi": 8.0,
-    "Maharashtra": 9.0,
-    "Uttar Pradesh": 7.0,
-    "Gujarat": 7.5,
-    "Tamil Nadu": 6.5,
-    "Karnataka": 7.2,
-    "Default": 7.0
+    "Rajasthan": 6.0, "Delhi": 8.0, "Maharashtra": 9.0, "Uttar Pradesh": 7.0,
+    "Gujarat": 7.5, "Tamil Nadu": 6.5, "Karnataka": 7.2, "Default": 7.0
 }
 
 PANEL_EFFICIENCY = 0.20
@@ -159,17 +164,13 @@ if address:
 shadow_area = st.number_input("Enter shadow-covered area (m², optional):", min_value=0.0, value=0.0)
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "West", "North"])
 orientation_factor = {"South (best)": 1.0, "East": 0.8, "West": 0.8, "North": 0.5}[orientation]
-state = st.selectbox("Select state:", list(STATE_TARIFFS.keys()))
+state = st.selectbox("Select state:", list(STATE_IRRADIANCES.keys()))
+irradiance = STATE_IRRADIANCES.get(state, 1700)
 tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
 
 # Run calculation only on button
 if st.button("🔍 Calculate Solar Potential"):
     if roof_area and (lat and lon):
-        irradiance = get_pvgis_irradiance(lat, lon)
-        if not irradiance:
-            irradiance = 1700
-            st.warning("Could not fetch irradiance, using default 1700 kWh/m²/yr.")
-
         results = calculate_results(roof_area, shadow_area, irradiance, orientation_factor, tariff)
 
         st.subheader("📊 Results")
