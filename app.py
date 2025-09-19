@@ -84,19 +84,21 @@ def compute_area(geojson_polygon):
     return transform(transformer.transform, geom).area
 
 def get_pvgis_irradiance(lat, lon):
-    """Fetch annual irradiance (GHI) from PVGIS. Returns value or None. Shows JSON in expander for debugging."""
     try:
-        params = {"lat": lat, "lon": lon, "outputformat": "json", "browser": 1, "usehorizon": 1}
+        # Minimal valid PVGIS request
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "peakpower": 1,       # 1 kWp system
+            "loss": 14,           # 14% system loss
+            "pvtechchoice": "crystSi",
+            "outputformat": "json"
+        }
         r = requests.get(PVGIS_API, params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            # Show full JSON for debugging
-            with st.expander("🔹 PVGIS JSON Response (for debugging)"):
-                st.json(data)
-            totals = data.get("outputs", {}).get("totals", {}).get("fixed", {})
-            # Try multiple keys
-            irradiance = totals.get("E_y") or totals.get("E") or totals.get("GHI")
-            return irradiance
+            st.info(f"PVGIS JSON response: {data}")  # debug output
+            return data.get("outputs", {}).get("totals", {}).get("fixed", {}).get("E_y", None)
         else:
             st.warning(f"PVGIS request returned status {r.status_code}")
     except Exception as e:
