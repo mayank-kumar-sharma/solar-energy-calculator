@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import requests
 import json
@@ -10,7 +9,7 @@ from functools import partial
 # -----------------------------
 # Config / Constants
 # -----------------------------
-PVGIS_API = "https://re.jrc.ec.europa.eu/api/v5_2/PVcalc"
+PVGIS_API = "https://re.jrc.ec.europa.eu/api/v5_2/seriescalc"
 
 STATE_TARIFFS = {
     "Rajasthan": 6.0,
@@ -36,10 +35,13 @@ def geocode_address(address):
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": address, "format": "json", "limit": 1}
     headers = {"User-Agent": "SolarApp/1.0 (your_email@example.com)"}  # REQUIRED
-    r = requests.get(url, params=params, headers=headers)
-    if r.status_code == 200 and r.json():
-        data = r.json()[0]
-        return float(data["lat"]), float(data["lon"]), data.get("display_name", "")
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        if r.status_code == 200 and r.json():
+            data = r.json()[0]
+            return float(data["lat"]), float(data["lon"]), data.get("display_name", "")
+    except Exception as e:
+        st.warning(f"Geocoding failed: {e}")
     return None, None, None
 
 
@@ -51,15 +53,19 @@ def get_building_polygon(lat, lon):
     way(around:30,{lat},{lon})["building"];
     out geom;
     """
-    r = requests.get(overpass_url, params={"data": query})
-    if r.status_code != 200:
+    try:
+        r = requests.get(overpass_url, params={"data": query}, timeout=15)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        if not data.get("elements"):
+            return None
+        coords = [(pt["lon"], pt["lat"]) for pt in data["elements"][0]["geometry"]]
+        poly = {"type": "Polygon", "coordinates": [coords]}
+        return compute_area(poly)
+    except Exception as e:
+        st.warning(f"OSM query failed: {e}")
         return None
-    data = r.json()
-    if not data["elements"]:
-        return None
-    coords = [(pt["lon"], pt["lat"]) for pt in data["elements"][0]["geometry"]]
-    poly = {"type": "Polygon", "coordinates": [coords]}
-    return compute_area(poly)
 
 
 def compute_area(geojson_polygon):
@@ -82,14 +88,15 @@ def get_pvgis_irradiance(lat, lon):
         "browser": 1,
         "usehorizon": 1,
     }
-    r = requests.get(PVGIS_API, params=params)
-    if r.status_code != 200:
-        return None
     try:
-        data = r.json()
-        return data["outputs"]["totals"]["fixed"]["E_y"]
-    except Exception:
-        return None
+        r = requests.get(PVGIS_API, params=params, timeout=15)
+        if r.status_code == 200:
+            data = r.json()
+            # Extract annual global irradiation
+            return data["outputs"]["totals"]["fixed"]["E_y"]
+    except Exception as e:
+        st.warning(f"PVGIS fetch failed: {e}")
+    return None
 
 
 def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff):
@@ -134,7 +141,7 @@ else:
 
 # Demo button
 if st.button("Use Demo Address"):
-    address = "India Gate, New Delhi"
+    address = "India Gate, Delhi"
     st.info(f"Demo address selected: {address}")
 
 # Geocode
@@ -163,7 +170,7 @@ tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.ge
 # Run calculation only on button
 if st.button("🔍 Calculate Solar Potential"):
     if roof_area and (lat and lon):
-        irradiance = get_pvgis_irradiance(lat, lon) if lat and lon else 1700
+        irradiance = get_pvgis_irradiance(lat, lon)
         if not irradiance:
             irradiance = 1700
             st.warning("Could not fetch irradiance, using default 1700 kWh/m²/yr.")
