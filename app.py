@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 from shapely.geometry import shape
 from shapely.ops import transform
 import pyproj
@@ -9,7 +8,7 @@ from functools import partial
 # -----------------------------
 # Config / Constants
 # -----------------------------
-PVGIS_API = "https://re.jrc.ec.europa.eu/api/v5_2/seriescalc"
+PVGIS_API = "https://re.jrc.ec.europa.eu/api/v5_2/PVcalc"
 
 STATE_TARIFFS = {
     "Rajasthan": 6.0,
@@ -34,7 +33,7 @@ def geocode_address(address):
     """Get lat/lon from address using Nominatim."""
     url = "https://nominatim.openstreetmap.org/search"
     params = {"q": address, "format": "json", "limit": 1}
-    headers = {"User-Agent": "SolarApp/1.0 (your_email@example.com)"}  # REQUIRED
+    headers = {"User-Agent": "SolarApp/1.0 (your_email@example.com)"}
     try:
         r = requests.get(url, params=params, headers=headers, timeout=10)
         if r.status_code == 200 and r.json():
@@ -43,7 +42,6 @@ def geocode_address(address):
     except Exception as e:
         st.warning(f"Geocoding failed: {e}")
     return None, None, None
-
 
 def get_building_polygon(lat, lon):
     """Query OSM Overpass for building polygons near given coordinates."""
@@ -67,7 +65,6 @@ def get_building_polygon(lat, lon):
         st.warning(f"OSM query failed: {e}")
         return None
 
-
 def compute_area(geojson_polygon):
     """Compute polygon area in square meters."""
     geom = shape(geojson_polygon)
@@ -78,7 +75,6 @@ def compute_area(geojson_polygon):
     )
     return transform(proj, geom).area
 
-
 def get_pvgis_irradiance(lat, lon):
     """Fetch annual irradiance (GHI) from PVGIS in kWh/m²/year."""
     params = {
@@ -86,18 +82,17 @@ def get_pvgis_irradiance(lat, lon):
         "lon": lon,
         "outputformat": "json",
         "browser": 1,
-        "usehorizon": 1,
+        "usehorizon": 1
     }
     try:
         r = requests.get(PVGIS_API, params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            # Extract annual global irradiation
-            return data["outputs"]["totals"]["fixed"]["E_y"]
+            # Correct key for fixed tilt PV: outputs.totals.fixed.E_y
+            return data.get("outputs", {}).get("totals", {}).get("fixed", {}).get("E_y", None)
     except Exception as e:
         st.warning(f"PVGIS fetch failed: {e}")
     return None
-
 
 def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff):
     """Perform solar calculations."""
