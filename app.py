@@ -97,12 +97,17 @@ def get_pvgis_irradiance(lat, lon):
         r = requests.get(PVGIS_API, params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            st.info(f"PVGIS JSON response: {data}")  # debug output
-            return data.get("outputs", {}).get("totals", {}).get("fixed", {}).get("E_y", None)
+            # Extract annual irradiance directly
+            e_y = data.get("outputs", {}).get("totals", {}).get("fixed", {}).get("E_y", None)
+            if e_y:
+                st.info(f"PVGIS annual irradiance found: {e_y:.2f} kWh/m²/yr")
+                return e_y
+            else:
+                st.warning("PVGIS response did not contain annual irradiance. Using state average.")
         else:
-            st.warning(f"PVGIS request returned status {r.status_code}")
+            st.warning(f"PVGIS request returned status {r.status_code}. Using state average.")
     except Exception as e:
-        st.warning(f"PVGIS fetch failed: {e}")
+        st.warning(f"PVGIS fetch failed: {e}. Using state average.")
     return None
 
 def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff):
@@ -172,14 +177,20 @@ orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "W
 orientation_factor = {"South (best)": 1.0, "East": 0.8, "West": 0.8, "North": 0.5}[orientation]
 
 state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
+
 # PVGIS fetch
+irradiance_source = "state average"
 if lat and lon:
-    irradiance = get_pvgis_irradiance(lat, lon)
-    if not irradiance:
+    pvgis_irradiance = get_pvgis_irradiance(lat, lon)
+    if pvgis_irradiance:
+        irradiance = pvgis_irradiance
+        irradiance_source = "PVGIS"
+    else:
         irradiance = STATE_IRRADIANCES.get(state, 1700)
-        st.warning(f"Could not fetch irradiance from PVGIS. Using state average: {irradiance} kWh/m²/yr")
 else:
     irradiance = STATE_IRRADIANCES.get(state, 1700)
+
+st.info(f"Irradiance used for calculation: {irradiance:.2f} kWh/m²/yr ({irradiance_source})")
 
 tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
 
