@@ -210,3 +210,28 @@ if st.button("🔍 Calculate Solar Potential"):
             st.write(f"**CO₂ Saved:** {results['co2_tons']:.2f} tons/year")
     else:
         st.error("Please enter a valid roof area or select house type.")
+
+# -----------------------------
+# Permanent Footer
+# -----------------------------
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #f1f1f1;
+        color: black;
+        text-align: center;
+        padding: 8px 0;
+        font-size: 14px;
+    }
+    </style>
+    <div class="footer">
+        Made with ❤️ by Mayank Kumar Sharma
+    </div>
+    """,
+    unsafe_allow_html=True
+)
