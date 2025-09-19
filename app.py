@@ -89,15 +89,14 @@ def get_pvgis_irradiance(lat, lon):
         params = {
             "lat": lat,
             "lon": lon,
-            "peakpower": 1,       # 1 kWp system
-            "loss": 14,           # 14% system loss
+            "peakpower": 1,
+            "loss": 14,
             "pvtechchoice": "crystSi",
             "outputformat": "json"
         }
         r = requests.get(PVGIS_API, params=params, timeout=15)
         if r.status_code == 200:
             data = r.json()
-            # Extract annual irradiance directly
             e_y = data.get("outputs", {}).get("totals", {}).get("fixed", {}).get("E_y", None)
             if e_y:
                 st.info(f"PVGIS annual irradiance found: {e_y:.2f} kWh/m²/yr")
@@ -214,24 +213,5 @@ if st.button("🔍 Calculate Solar Potential"):
 # -----------------------------
 # Permanent Footer
 # -----------------------------
-st.markdown(
-    """
-    <style>
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: #f1f1f1;
-        color: black;
-        text-align: center;
-        padding: 8px 0;
-        font-size: 14px;
-    }
-    </style>
-    <div class="footer">
-        Made with ❤️ by Mayank Kumar Sharma
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("---")
+st.markdown("💡 Made with ❤️ by **Mayank Kumar Sharma**")
