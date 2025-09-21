@@ -40,6 +40,8 @@ HOUSE_TYPE_AREA = {
     "Villa": 250, "Independent House": 120, "2 BHK": 80, "3 BHK": 120, "Other": 100
 }
 
+MAX_RESIDENTIAL_ROOF = 500  # m² threshold for realistic roof area
+
 # -----------------------------
 # Helper functions
 # -----------------------------
@@ -159,8 +161,14 @@ if address:
         if area_method == "Get from address" and roof_area is None:
             poly_area = get_building_polygon(lat, lon)
             if poly_area:
-                roof_area = poly_area
-                st.info(f"Detected building area: {roof_area:.2f} m²")
+                if poly_area > MAX_RESIDENTIAL_ROOF:
+                    st.warning(f"Detected building area is {poly_area:.2f} m², which seems too large for a residential roof. Please select your house type instead. Irradiance will still be fetched from your location.")
+                    house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
+                    roof_area = HOUSE_TYPE_AREA.get(house_type, 100)
+                    st.info(f"Using default roof area for {house_type}: {roof_area} m²")
+                else:
+                    roof_area = poly_area
+                    st.info(f"Detected building area: {roof_area:.2f} m²")
     if roof_area is None:
         st.warning("Roof area could not be determined. Please select house type for default area.")
         house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
