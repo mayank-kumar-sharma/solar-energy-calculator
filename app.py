@@ -130,10 +130,35 @@ def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff)
     }
 
 # -----------------------------
+# Panel Recommendation with Images
+# -----------------------------
+PANEL_IMAGES = {
+    "Monocrystalline": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Monocrystalline_solar_panel.jpg",
+    "Polycrystalline": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Polycrystalline_solar_panel.jpg",
+    "Thin-Film": "https://upload.wikimedia.org/wikipedia/commons/f/fc/Thin-film_solar_module.jpg"
+}
+
+def recommend_panel(roof_area, irradiance):
+    if roof_area < 150:
+        if irradiance > 1800:
+            return "Monocrystalline", "Small roof with high irradiance → best efficiency panel"
+        else:
+            return "Monocrystalline / Polycrystalline", "Small roof → efficiency matters"
+    elif 150 <= roof_area <= 500:
+        if irradiance > 1800:
+            return "Monocrystalline / Polycrystalline", "Medium roof with high irradiance → balance efficiency & cost"
+        elif 1500 <= irradiance <= 1800:
+            return "Polycrystalline", "Medium roof with medium irradiance → standard panel sufficient"
+        else:
+            return "Polycrystalline / Thin-Film", "Medium roof with low irradiance → cost-effective panel"
+    else:
+        return "Polycrystalline / Thin-Film", "Large roof → space allows cheaper panels; efficiency less critical"
+
+# -----------------------------
 # Streamlit UI
 # -----------------------------
 st.title("☀️ Solar Rooftop Estimation Tool")
-st.markdown("Estimate rooftop solar capacity, energy generation, savings, and CO₂ benefits.")
+st.markdown("Estimate rooftop solar capacity, energy generation, savings, CO₂ benefits, and recommended panel type.")
 
 area_method = st.radio("Select roof area input method:", ["Enter directly", "Get from address"])
 roof_area = None
@@ -207,6 +232,7 @@ tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.ge
 if st.button("🔍 Calculate Solar Potential"):
     if roof_area:
         results = calculate_results(roof_area, shadow_area, irradiance, orientation_factor, tariff)
+        panel_type, panel_reason = recommend_panel(roof_area, irradiance)
         with st.expander("📊 Results"):
             st.write(f"**Effective Area:** {results['effective_area']:.2f} m²")
             st.write(f"**Solar Capacity:** {results['capacity_kw']:.2f} kW")
@@ -215,6 +241,14 @@ if st.button("🔍 Calculate Solar Potential"):
             st.write(f"**Installation Cost:** ₹{results['inst_cost']:.2f}")
             st.write(f"**Payback Period:** {results['payback_years']:.2f} years")
             st.write(f"**CO₂ Saved:** {results['co2_tons']:.2f} tons/year")
+            st.write(f"**Recommended Panel Type:** {panel_type}")
+            st.write(f"**Recommendation Reason:** {panel_reason}")
+
+            # Display image if available
+            base_type = panel_type.split("/")[0].strip()
+            img_url = PANEL_IMAGES.get(base_type)
+            if img_url:
+                st.image(img_url, caption=base_type, use_column_width=True)
     else:
         st.error("Please enter a valid roof area or select house type.")
 
