@@ -1,6 +1,4 @@
-streamlit==1.37.1
-requests==2.31.0
-shapely==2.0.4
-pyproj==3.6.1
-geopandas==0.14.4
-fiona==1.9.4.post1
+geopandas==0.13.0
+fiona==1.9.0
+shapely==1.8.5
+pyproj==3.5.0
