@@ -5,4 +5,5 @@ pandas==2.2.1
 shapely==2.0.4
 pyproj==3.6.1
 geopandas==0.14.4
-gdal==3.6.2
+Fiona==1.9.4
+GDAL==3.6.2
