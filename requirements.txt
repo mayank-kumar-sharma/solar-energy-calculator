@@ -3,4 +3,3 @@ requests==2.31.0
 shapely==2.0.4
 pyproj==3.6.1
 geopandas==0.14.4
-fiona==1.9.4.post1
