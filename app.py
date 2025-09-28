@@ -41,6 +41,7 @@ HOUSE_TYPE_AREA = {
 }
 
 MAX_RESIDENTIAL_ROOF = 500  # m² threshold for realistic roof area
+M2_TO_SQFT = 10.7639  # conversion factor
 
 # -----------------------------
 # Helper functions
@@ -87,7 +88,6 @@ def compute_area(geojson_polygon):
 
 def get_pvgis_irradiance(lat, lon):
     try:
-        # Minimal valid PVGIS request
         params = {
             "lat": lat,
             "lon": lon,
@@ -111,8 +111,8 @@ def get_pvgis_irradiance(lat, lon):
         st.warning(f"PVGIS fetch failed: {e}. Using state average.")
     return None
 
-def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff):
-    effective_area = max(area - shadow_area, 0)
+def calculate_results(area, shadow_free_area, irradiance, orientation_factor, tariff):
+    effective_area = min(area, shadow_free_area)  # shadow-free
     capacity_kw = effective_area / 10
     annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor
     annual_savings = annual_gen * tariff
@@ -129,25 +129,13 @@ def calculate_results(area, shadow_area, irradiance, orientation_factor, tariff)
         "inst_cost": inst_cost
     }
 
-# -----------------------------
-# New: Panel Recommendation Logic
-# -----------------------------
-def recommend_panel(roof_area, irradiance):
-    # Define thresholds
+def recommend_panel(roof_area):
     if roof_area < 150:
-        if irradiance > 1800:
-            return "Monocrystalline", "Small roof with high irradiance → best efficiency panel"
-        else:
-            return "Monocrystalline / Polycrystalline", "Small roof → efficiency matters"
+        return "Monocrystalline"
     elif 150 <= roof_area <= 500:
-        if irradiance > 1800:
-            return "Monocrystalline / Polycrystalline", "Medium roof with high irradiance → balance efficiency & cost"
-        elif 1500 <= irradiance <= 1800:
-            return "Polycrystalline", "Medium roof with medium irradiance → standard panel sufficient"
-        else:
-            return "Polycrystalline / Thin-Film", "Medium roof with low irradiance → cost-effective panel"
-    else:  # Large roof >500
-        return "Polycrystalline / Thin-Film", "Large roof → space allows cheaper panels; efficiency less critical"
+        return "Polycrystalline"
+    else:
+        return "Thin-Film"
 
 # -----------------------------
 # Streamlit UI
@@ -155,57 +143,43 @@ def recommend_panel(roof_area, irradiance):
 st.title("☀️ Solar Rooftop Estimation Tool")
 st.markdown("Estimate rooftop solar capacity, energy generation, savings, CO₂ benefits, and recommended panel type.")
 
-area_method = st.radio("Select roof area input method:", ["Enter directly", "Get from address"])
+area_method = st.radio("Select roof area input method:", ["Enter directly", "Select house type"])
 roof_area = None
 lat = lon = None
 location_name = ""
 
 address = ""
 if area_method == "Enter directly":
-    roof_area = st.number_input("Enter roof area (m²):", min_value=10.0, step=10.0)
+    roof_area_sqft = st.number_input("Enter roof area (sq ft):", min_value=100.0, step=50.0)
+    roof_area = roof_area_sqft / M2_TO_SQFT  # convert to m² for calculations
     address = st.text_input("Enter address (for irradiance):")
 else:
-    address = st.text_input("Enter address (roof + irradiance):")
+    house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
+    roof_area = HOUSE_TYPE_AREA.get(house_type, 100)
+    roof_area_sqft = roof_area * M2_TO_SQFT
+    st.info(f"Using default roof area for {house_type}: {roof_area_sqft:.2f} sq ft")
+    address = st.text_input("Enter address (for irradiance):")
 
 if st.button("Use Demo Address"):
     address = "India Gate, Delhi"
     st.info(f"Demo address selected: {address}")
 
-# -----------------------------
-# Geocode + fallback logic
-# -----------------------------
+# Geocode + PVGIS
 if address:
     lat, lon, location_name = geocode_address(address)
     if lat and lon:
         st.success(f"Geocoded: {location_name} ({lat:.4f}, {lon:.4f})")
-        if area_method == "Get from address" and roof_area is None:
-            poly_area = get_building_polygon(lat, lon)
-            if poly_area:
-                if poly_area > MAX_RESIDENTIAL_ROOF:
-                    st.warning(f"Detected building area is {poly_area:.2f} m², which seems too large for a residential roof. Please select your house type instead. Irradiance will still be fetched from your location.")
-                    house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
-                    roof_area = HOUSE_TYPE_AREA.get(house_type, 100)
-                    st.info(f"Using default roof area for {house_type}: {roof_area} m²")
-                else:
-                    roof_area = poly_area
-                    st.info(f"Detected building area: {roof_area:.2f} m²")
-    if roof_area is None:
-        st.warning("Roof area could not be determined. Please select house type for default area.")
-        house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
-        roof_area = HOUSE_TYPE_AREA.get(house_type, 100)
-        st.info(f"Using default roof area for {house_type}: {roof_area} m²")
 
-# -----------------------------
-# Shadow + orientation + tariff
-# -----------------------------
-st.markdown("**Shadow area:** Area covered by trees, walls, or other objects that reduce sunlight on panels.")
-shadow_area = st.number_input("Enter shadow-covered area (m², optional):", min_value=0.0, value=0.0)
+# Shadow-free input
+st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
+shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=50.0, value=roof_area_sqft)
+shadow_free_area = shadow_free_sqft / M2_TO_SQFT  # convert to m²
+
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "West", "North"])
 orientation_factor = {"South (best)": 1.0, "East": 0.8, "West": 0.8, "North": 0.5}[orientation]
 
 state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
 
-# PVGIS fetch
 irradiance_source = "state average"
 if lat and lon:
     pvgis_irradiance = get_pvgis_irradiance(lat, lon)
@@ -218,18 +192,15 @@ else:
     irradiance = STATE_IRRADIANCES.get(state, 1700)
 
 st.info(f"Irradiance used for calculation: {irradiance:.2f} kWh/m²/yr ({irradiance_source})")
-
 tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
 
-# -----------------------------
 # Calculate
-# -----------------------------
 if st.button("🔍 Calculate Solar Potential"):
     if roof_area:
-        results = calculate_results(roof_area, shadow_area, irradiance, orientation_factor, tariff)
-        panel_type, panel_reason = recommend_panel(roof_area, irradiance)
+        results = calculate_results(roof_area, shadow_free_area, irradiance, orientation_factor, tariff)
+        panel_type = recommend_panel(roof_area)
         with st.expander("📊 Results"):
-            st.write(f"**Effective Area:** {results['effective_area']:.2f} m²")
+            st.write(f"**Effective Area:** {results['effective_area']*M2_TO_SQFT:.2f} sq ft")
             st.write(f"**Solar Capacity:** {results['capacity_kw']:.2f} kW")
             st.write(f"**Annual Generation:** {results['annual_gen']:.2f} kWh")
             st.write(f"**Annual Savings:** ₹{results['annual_savings']:.2f}")
@@ -237,12 +208,9 @@ if st.button("🔍 Calculate Solar Potential"):
             st.write(f"**Payback Period:** {results['payback_years']:.2f} years")
             st.write(f"**CO₂ Saved:** {results['co2_tons']:.2f} tons/year")
             st.write(f"**Recommended Panel Type:** {panel_type}")
-            st.write(f"**Recommendation Reason:** {panel_reason}")
     else:
         st.error("Please enter a valid roof area or select house type.")
 
-# -----------------------------
-# Permanent Footer
-# -----------------------------
+# Footer
 st.markdown("---")
 st.markdown("💡 Made with ❤️ by **Mayank Kumar Sharma**")
