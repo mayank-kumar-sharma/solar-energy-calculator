@@ -127,7 +127,7 @@ def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, t
     # Annual generation (physics-based)
     annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor  # kWh/year
 
-    # Capacity derived from generation vs typical specific yield (≈1500 kWh/kWp/year in India)
+    # Capacity derived from generation vs typical specific yield (~1500 kWh/kWp/year in India)
     capacity_kw = annual_gen / 1500  
 
     annual_savings = annual_gen * tariff
@@ -161,18 +161,18 @@ st.markdown("Estimate rooftop solar capacity, energy generation, savings, CO₂ 
 
 area_method = st.radio("Select roof area input method:", ["Enter directly", "Select house type"])
 roof_area_m2 = None
-roof_area_sqft = 100.0  # ✅ safe default
+roof_area_sqft = None
 lat = lon = None
 location_name = ""
 address = ""
 
 if area_method == "Enter directly":
     roof_area_sqft = st.number_input("Enter roof area (sq ft):", min_value=100.0, step=50.0)
-    roof_area_m2 = roof_area_sqft / M2_TO_SQFT  # convert to m²
+    roof_area_m2 = roof_area_sqft / M2_TO_SQFT
     address = st.text_input("Enter address (for irradiance):")
 else:
     house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
-    roof_area_sqft = HOUSE_TYPE_AREA.get(house_type, 100)
+    roof_area_sqft = float(HOUSE_TYPE_AREA.get(house_type, 100))
     roof_area_m2 = roof_area_sqft / M2_TO_SQFT
     st.info(f"Using default roof area for {house_type}: {roof_area_sqft:.2f} sq ft")
     address = st.text_input("Enter address (for irradiance):")
@@ -192,7 +192,8 @@ st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
 shadow_free_sqft = st.number_input(
     "Enter shadow-free area (sq ft):",
     min_value=50.0,
-    value=max(roof_area_sqft, 100.0)  # ✅ ensures safe default
+    value=float(roof_area_sqft) if roof_area_sqft else 100.0,
+    step=10.0
 )
 shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
 
