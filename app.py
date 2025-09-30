@@ -192,7 +192,7 @@ st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
 shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=50.0, value=roof_area_sqft if roof_area_sqft else 100.0)
 shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
 
-orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "West", "North"])
+orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
 orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
 
 state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
