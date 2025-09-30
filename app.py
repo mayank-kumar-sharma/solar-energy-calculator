@@ -161,7 +161,7 @@ st.markdown("Estimate rooftop solar capacity, energy generation, savings, CO₂ 
 
 area_method = st.radio("Select roof area input method:", ["Enter directly", "Select house type"])
 roof_area_m2 = None
-roof_area_sqft = None
+roof_area_sqft = 100.0  # ✅ safe default
 lat = lon = None
 location_name = ""
 address = ""
@@ -189,7 +189,11 @@ if address:
 
 # Shadow-free input
 st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
-shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=50.0, value=roof_area_sqft if roof_area_sqft else 100.0)
+shadow_free_sqft = st.number_input(
+    "Enter shadow-free area (sq ft):",
+    min_value=50.0,
+    value=max(roof_area_sqft, 100.0)  # ✅ ensures safe default
+)
 shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
 
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
