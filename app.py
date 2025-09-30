@@ -193,7 +193,7 @@ shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=
 shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
 
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "West", "North"])
-orientation_factor = {"South (best)": 1.0, "East": 0.8, "West": 0.8, "North": 0.5}[orientation]
+orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
 
 state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
 irradiance_source = "state average"
