@@ -49,7 +49,6 @@ HOUSE_TYPE_AREA = {
 MAX_RESIDENTIAL_ROOF = 500  # m² threshold for realistic roof area
 M2_TO_SQFT = 10.7639  # conversion factor
 
-
 # -----------------------------
 # Helper functions
 # -----------------------------
@@ -65,7 +64,6 @@ def geocode_address(address):
     except Exception as e:
         st.warning(f"Geocoding failed: {e}")
     return None, None, None
-
 
 def get_building_polygon(lat, lon):
     try:
@@ -85,7 +83,6 @@ def get_building_polygon(lat, lon):
         st.warning(f"OSM query failed: {e}")
     return None
 
-
 def compute_area(geojson_polygon):
     geom = shape(geojson_polygon)
     transformer = Transformer.from_crs(
@@ -98,7 +95,6 @@ def compute_area(geojson_polygon):
         always_xy=True
     )
     return transform(transformer.transform, geom).area
-
 
 def get_pvgis_irradiance(lat, lon):
     try:
@@ -125,15 +121,20 @@ def get_pvgis_irradiance(lat, lon):
         st.warning(f"PVGIS fetch failed: {e}. Using state average.")
     return None
 
+def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, tariff):
+    effective_area = min(area_m2, shadow_free_m2)  # shadow-free usable area (m²)
 
-def calculate_results(area, shadow_free_area, irradiance, orientation_factor, tariff):
-    effective_area = min(area, shadow_free_area)  # shadow-free
-    capacity_kw = effective_area / 10
-    annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor
+    # Annual generation (physics-based)
+    annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor  # kWh/year
+
+    # Capacity derived from generation vs typical specific yield (≈1500 kWh/kWp/year in India)
+    capacity_kw = annual_gen / 1500  
+
     annual_savings = annual_gen * tariff
     inst_cost = capacity_kw * COST_PER_KW
     payback_years = inst_cost / annual_savings if annual_savings > 0 else None
     co2_tons = (annual_gen * CO2_FACTOR) / 1000
+
     return {
         "effective_area": effective_area,
         "capacity_kw": capacity_kw,
@@ -144,15 +145,13 @@ def calculate_results(area, shadow_free_area, irradiance, orientation_factor, ta
         "inst_cost": inst_cost
     }
 
-
-def recommend_panel(roof_area):
-    if roof_area < 150:
+def recommend_panel(roof_area_sqft):
+    if roof_area_sqft < 150:
         return "Monocrystalline"
-    elif 150 <= roof_area <= 500:
+    elif 150 <= roof_area_sqft <= 500:
         return "Polycrystalline"
     else:
         return "Thin-Film"
-
 
 # -----------------------------
 # Streamlit UI
@@ -161,19 +160,20 @@ st.title("☀️ Solar Rooftop Estimation Tool")
 st.markdown("Estimate rooftop solar capacity, energy generation, savings, CO₂ benefits, and recommended panel type.")
 
 area_method = st.radio("Select roof area input method:", ["Enter directly", "Select house type"])
-roof_area = None
+roof_area_m2 = None
+roof_area_sqft = None
 lat = lon = None
 location_name = ""
 address = ""
 
 if area_method == "Enter directly":
     roof_area_sqft = st.number_input("Enter roof area (sq ft):", min_value=100.0, step=50.0)
-    roof_area = roof_area_sqft / M2_TO_SQFT  # convert to m²
+    roof_area_m2 = roof_area_sqft / M2_TO_SQFT  # convert to m²
     address = st.text_input("Enter address (for irradiance):")
 else:
     house_type = st.selectbox("Select house type:", list(HOUSE_TYPE_AREA.keys()))
-    roof_area = HOUSE_TYPE_AREA.get(house_type, 100)
-    roof_area_sqft = roof_area * M2_TO_SQFT
+    roof_area_sqft = HOUSE_TYPE_AREA.get(house_type, 100)
+    roof_area_m2 = roof_area_sqft / M2_TO_SQFT
     st.info(f"Using default roof area for {house_type}: {roof_area_sqft:.2f} sq ft")
     address = st.text_input("Enter address (for irradiance):")
 
@@ -189,8 +189,8 @@ if address:
 
 # Shadow-free input
 st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
-shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=50.0, value=roof_area_sqft)
-shadow_free_area = shadow_free_sqft / M2_TO_SQFT  # convert to m²
+shadow_free_sqft = st.number_input("Enter shadow-free area (sq ft):", min_value=50.0, value=roof_area_sqft if roof_area_sqft else 100.0)
+shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
 
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "East", "West", "North"])
 orientation_factor = {"South (best)": 1.0, "East": 0.8, "West": 0.8, "North": 0.5}[orientation]
@@ -214,9 +214,10 @@ tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.ge
 
 # Calculate
 if st.button("🔍 Calculate Solar Potential"):
-    if roof_area:
-        results = calculate_results(roof_area, shadow_free_area, irradiance, orientation_factor, tariff)
-        panel_type = recommend_panel(roof_area)
+    if roof_area_m2:
+        results = calculate_results(roof_area_m2, shadow_free_m2, irradiance, orientation_factor, tariff)
+        panel_type = recommend_panel(roof_area_sqft)
+
         with st.expander("📊 Results"):
             st.write(f"**Effective Area:** {results['effective_area']*M2_TO_SQFT:.2f} sq ft")
             st.write(f"**Solar Capacity:** {results['capacity_kw']:.2f} kW")
