@@ -37,6 +37,7 @@ PANEL_EFFICIENCY = 0.20
 SYSTEM_DERATE = 0.85
 COST_PER_KW = 50000  # INR
 CO2_FACTOR = 0.82   # kg CO₂ / kWh
+KW_PER_M2 = 0.143   # realistic capacity per m²
 
 HOUSE_TYPE_AREA = {
     "Villa": 250,
@@ -62,7 +63,7 @@ def geocode_address(address):
             data = r.json()[0]
             return float(data["lat"]), float(data["lon"]), data.get("display_name", "")
     except:
-        pass  # silently fail and use state average
+        pass
     return None, None, None
 
 def get_building_polygon(lat, lon):
@@ -113,17 +114,16 @@ def get_pvgis_irradiance(lat, lon):
                 st.info(f"PVGIS annual irradiance found: {e_y:.2f} kWh/m²/yr")
                 return e_y
     except:
-        pass  # silently fail and use state average
+        pass
     return None
 
 def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, tariff):
-    # Effective shadow-free area
     effective_area = min(area_m2, shadow_free_m2)
 
-    # Max installable capacity based on roof area (m² * panel efficiency)
-    max_capacity_kw = effective_area * PANEL_EFFICIENCY
+    # Max installable capacity based on roof area
+    max_capacity_kw = effective_area * KW_PER_M2
 
-    # Raw physics-based annual generation
+    # Physics-based annual generation
     raw_annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor
 
     # Capacity limited by roof area
@@ -197,7 +197,7 @@ shadow_free_sqft = st.number_input(
     value=float(roof_area_sqft) if roof_area_sqft else 100.0,
     step=10.0
 )
-shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
+shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT
 
 orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
 orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
