@@ -117,11 +117,20 @@ def get_pvgis_irradiance(lat, lon):
     return None
 
 def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, tariff):
-    effective_area = min(area_m2, shadow_free_m2)  # shadow-free usable area (m²)
+    # Effective shadow-free area
+    effective_area = min(area_m2, shadow_free_m2)
 
-    annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor  # kWh/year
+    # Max installable capacity based on roof area (m² * panel efficiency)
+    max_capacity_kw = effective_area * PANEL_EFFICIENCY
 
-    capacity_kw = annual_gen / 1500  
+    # Raw physics-based annual generation
+    raw_annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor
+
+    # Capacity limited by roof area
+    capacity_kw = min(raw_annual_gen / 1500, max_capacity_kw)
+
+    # Annual generation adjusted to practical capacity
+    annual_gen = capacity_kw * 1500
 
     annual_savings = annual_gen * tariff
     inst_cost = capacity_kw * COST_PER_KW
