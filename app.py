@@ -61,8 +61,9 @@ def geocode_address(address):
         if r.status_code == 200 and r.json():
             data = r.json()[0]
             return float(data["lat"]), float(data["lon"]), data.get("display_name", "")
-    except Exception as e:
-        st.warning(f"Geocoding failed: {e}")
+    except:
+        # Silently fail and fallback to state average
+        return None, None, None
     return None, None, None
 
 def get_building_polygon(lat, lon):
@@ -113,12 +114,8 @@ def get_pvgis_irradiance(lat, lon):
             if e_y:
                 st.info(f"PVGIS annual irradiance found: {e_y:.2f} kWh/m²/yr")
                 return e_y
-            else:
-                st.warning("PVGIS response did not contain annual irradiance. Using state average.")
-        else:
-            st.warning(f"PVGIS request returned status {r.status_code}. Using state average.")
-    except Exception as e:
-        st.warning(f"PVGIS fetch failed: {e}. Using state average.")
+    except:
+        pass
     return None
 
 def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, tariff):
@@ -182,10 +179,22 @@ if st.button("Use Demo Address"):
     st.info(f"Demo address selected: {address}")
 
 # Geocode + PVGIS
+irradiance_source = "state average"
 if address:
     lat, lon, location_name = geocode_address(address)
     if lat and lon:
-        st.success(f"Geocoded: {location_name} ({lat:.4f}, {lon:.4f})")
+        pvgis_irradiance = get_pvgis_irradiance(lat, lon)
+        if pvgis_irradiance:
+            irradiance = pvgis_irradiance
+            irradiance_source = "PVGIS"
+        else:
+            irradiance = STATE_IRRADIANCES.get(state, 1700)
+    else:
+        irradiance = STATE_IRRADIANCES.get(state, 1700)
+else:
+    irradiance = STATE_IRRADIANCES.get(state, 1700)
+
+st.info(f"Irradiance used for calculation: {irradiance:.2f} kWh/m²/yr ({irradiance_source})")
 
 # Shadow-free input
 st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
@@ -201,20 +210,6 @@ orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
 orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
 
 state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
-irradiance_source = "state average"
-
-if lat and lon:
-    pvgis_irradiance = get_pvgis_irradiance(lat, lon)
-    if pvgis_irradiance:
-        irradiance = pvgis_irradiance
-        irradiance_source = "PVGIS"
-    else:
-        irradiance = STATE_IRRADIANCES.get(state, 1700)
-else:
-    irradiance = STATE_IRRADIANCES.get(state, 1700)
-
-st.info(f"Irradiance used for calculation: {irradiance:.2f} kWh/m²/yr ({irradiance_source})")
-
 tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
 
 # Calculate
