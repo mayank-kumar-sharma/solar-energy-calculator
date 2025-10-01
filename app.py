@@ -62,8 +62,7 @@ def geocode_address(address):
             data = r.json()[0]
             return float(data["lat"]), float(data["lon"]), data.get("display_name", "")
     except:
-        # Silently fail and fallback to state average
-        return None, None, None
+        pass  # silently fail and use state average
     return None, None, None
 
 def get_building_polygon(lat, lon):
@@ -80,9 +79,8 @@ def get_building_polygon(lat, lon):
         coords = [(pt["lon"], pt["lat"]) for pt in r.json()["elements"][0]["geometry"]]
         poly = {"type": "Polygon", "coordinates": [coords]}
         return compute_area(poly)
-    except Exception as e:
-        st.warning(f"OSM query failed: {e}")
-    return None
+    except:
+        return None
 
 def compute_area(geojson_polygon):
     geom = shape(geojson_polygon)
@@ -115,16 +113,14 @@ def get_pvgis_irradiance(lat, lon):
                 st.info(f"PVGIS annual irradiance found: {e_y:.2f} kWh/m²/yr")
                 return e_y
     except:
-        pass
+        pass  # silently fail and use state average
     return None
 
 def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, tariff):
     effective_area = min(area_m2, shadow_free_m2)  # shadow-free usable area (m²)
 
-    # Annual generation (physics-based)
     annual_gen = effective_area * irradiance * PANEL_EFFICIENCY * SYSTEM_DERATE * orientation_factor  # kWh/year
 
-    # Capacity derived from generation vs typical specific yield (~1500 kWh/kWp/year in India)
     capacity_kw = annual_gen / 1500  
 
     annual_savings = annual_gen * tariff
@@ -178,7 +174,28 @@ if st.button("Use Demo Address"):
     address = "India Gate, Delhi"
     st.info(f"Demo address selected: {address}")
 
+# -----------------------------
+# State & tariff selection
+# -----------------------------
+state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
+tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
+
+# Shadow-free input
+st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
+shadow_free_sqft = st.number_input(
+    "Enter shadow-free area (sq ft):",
+    min_value=50.0,
+    value=float(roof_area_sqft) if roof_area_sqft else 100.0,
+    step=10.0
+)
+shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
+
+orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
+orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
+
+# -----------------------------
 # Geocode + PVGIS
+# -----------------------------
 irradiance_source = "state average"
 if address:
     lat, lon, location_name = geocode_address(address)
@@ -196,23 +213,9 @@ else:
 
 st.info(f"Irradiance used for calculation: {irradiance:.2f} kWh/m²/yr ({irradiance_source})")
 
-# Shadow-free input
-st.markdown("**Shadow-free area:** Area of roof available for panels (sq ft).")
-shadow_free_sqft = st.number_input(
-    "Enter shadow-free area (sq ft):",
-    min_value=50.0,
-    value=float(roof_area_sqft) if roof_area_sqft else 100.0,
-    step=10.0
-)
-shadow_free_m2 = shadow_free_sqft / M2_TO_SQFT  # convert to m²
-
-orientation = st.selectbox("Orientation of panels:", ["South (best)", "North"])
-orientation_factor = {"South (best)": 1.0, "North": 0.5}[orientation]
-
-state = st.selectbox("Select state/UT:", list(STATE_IRRADIANCES.keys()))
-tariff = st.number_input("Electricity tariff (₹/kWh):", value=STATE_TARIFFS.get(state, 7.0))
-
+# -----------------------------
 # Calculate
+# -----------------------------
 if st.button("🔍 Calculate Solar Potential"):
     if roof_area_m2:
         results = calculate_results(roof_area_m2, shadow_free_m2, irradiance, orientation_factor, tariff)
