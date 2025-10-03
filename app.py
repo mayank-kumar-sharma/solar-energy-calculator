@@ -148,9 +148,9 @@ def calculate_results(area_m2, shadow_free_m2, irradiance, orientation_factor, t
     }
 
 def recommend_panel(roof_area_sqft):
-    if roof_area_sqft < 150:
+    if roof_area_sqft < 500:
         return "Monocrystalline"
-    elif 150 <= roof_area_sqft <= 500:
+    elif 500 <= roof_area_sqft <= 1000:
         return "Polycrystalline"
     else:
         return "Thin-Film"
